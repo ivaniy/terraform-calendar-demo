@@ -242,22 +242,6 @@ resource "aws_instance" "nat_gateway" {
   }
 }
 
-data "aws_ami" "ubuntu" {
-  most_recent = true
-
-  filter {
-    name   = "name"
-    values = ["ubuntu/images/hvm-ssd/ubuntu-trusty-14.04-amd64-server-*"]
-  }
-
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
-  }
-
-  owners = ["099720109477"] # Canonical
-}
-
 resource "aws_launch_configuration" "calendar_lnch_cfg" {
   name            = "Calendar_instances"
   image_id        = "${var.ubuntu_ami_eu_west_1}"
@@ -296,11 +280,13 @@ resource "aws_autoscaling_group" "bar" {
   }
 }
 
-# resource "aws_route" "Int_RT" {
-#   route_table_id         = "${aws_vpc.terraform_vpc.main_route_table_id}"
-#   destination_cidr_block = "0.0.0.0/0"
-#   gateway_id             = "${aws_internet_gateway.gw.id}"
-# }
+resource "aws_route" "Int_RT" {
+  route_table_id         = "${aws_route_table.private_rt.id }"
+  destination_cidr_block = "0.0.0.0/0"
+  instance_id            = "${aws_instance.nat_gateway.id}"
+  depends_on             = ["aws_instance.nat_gateway"]
+}
+
 
 # resource "aws_key_pair" "terraform_key" {
 #   key_name   = "terraform_key"
