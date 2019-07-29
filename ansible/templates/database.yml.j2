@@ -1,0 +1,22 @@
+default: &default
+  adapter: mysql2
+  encoding: utf8
+  pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
+  username: calendar_db_user
+  password: {{ db_password }}
+#  socket: /tmp/mysql.sock
+  host: {{ db_host_name }}
+
+development:
+  <<: *default
+  database: calendar_development
+
+test:
+  <<: *default
+  database: calendar_test
+
+production:
+  <<: *default
+  database: calendar_production
+  username: calendar_db_user
+  password: {{ db_password }}

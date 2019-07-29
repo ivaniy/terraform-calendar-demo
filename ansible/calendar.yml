@@ -1,0 +1,122 @@
+- hosts: tag_Name_First_Deploy
+# - hosts: calendar
+  # gather_facts: no 
+  roles:
+  - { role: ruby,
+      tags: ruby,
+      rvm_rubies: ['ruby-2.5.1'],
+      rvm_gpg_key_server_use_http: true,
+      rvm_gpg_key_server: "hkp://keys.gnupg.net",
+      become: true
+    }
+  - { role: nodejs,
+      become: yes
+    }
+  - { role: nginx,
+      nginx_packet: 'nginx-extras',
+      become: yes
+    }
+  - { role: passenger,
+      become: yes
+    }
+
+  tasks: 
+  - name: install mysql client and libdev
+    apt: 
+      name:
+        - mysql-client 
+        - libmysqlclient-dev
+      update_cache: yes
+      force_apt_get: yes
+    become: yes
+  
+  - name: clone calendar
+    git: 
+      repo: 'https://github.com/ivaniy/ruby-calendar.git'
+      dest: ~/calendar/
+      force: yes 
+
+  - name: install rails 5.2
+    shell: 'gem install rails -v 5.2'
+    async: 300
+    poll: 0
+    register: rails_waiter
+    become: true
+    # environment: 
+    #   PATH: '/home/ubuntu/.rvm/rubies/ruby-2.5.1/bin:/home/ubuntu/.rvm/gems/ruby-2.5.1/bin:/home/ubuntu/.rvm/gems/ruby-2.5.1@global/bin:{{ ansible_env.PATH }}' 
+    # gem: 
+    #   name: rails
+    #   version: '5.2'
+    #   state: present
+    #   user_install: no
+
+  - name: 'Checking is rails installed'
+    async_status:
+      jid: "{{ rails_waiter.ansible_job_id }}"
+    register: rails_result
+    until: rails_result.finished
+    delay: 30
+    retries: 11
+    become: true
+
+  - name: instal gems by bundler
+    # environment: 
+    #   PATH: '/home/ubuntu/.rvm/rubies/ruby-2.5.1/bin:/home/ubuntu/.rvm/gems/ruby-2.5.1/bin:/home/ubuntu/.rvm/gems/ruby-2.5.1@global/bin:{{ ansible_env.PATH }}' 
+    shell: bundle
+    args:
+      chdir: ~/calendar/ 
+
+  # - name: configure passenger
+  #   replace:
+  #     path: /etc/nginx/conf.d/mod-http-passenger.conf
+  #     regexp: 'passenger_ruby /usr/bin/passenger_free_ruby;' 
+  #     replace: 'passenger_ruby /home/ubuntu/.rvm/rubies/ruby-2.5.1/bin/ruby;'
+  #   become: yes
+
+  - name: remove default nginx config from enabled sites
+    file: 
+      path: /etc/nginx/sites-enabled/default
+      state: absent
+    become: yes
+
+  - name: copy Calendar nginx config
+    copy: 
+      src: files/calendar.conf
+      dest: /etc/nginx/sites-available/calendar.conf
+    become: yes
+    notify: restart nginx
+
+  - name: Make Symlink for calendar.conf in sites-enabled
+    file: 
+      src: /etc/nginx/sites-available/calendar.conf
+      dest: /etc/nginx/sites-enabled/calendar.conf
+      state: link
+    become: yes
+    notify: restart nginx
+
+  - name: copy configure database file
+    template: 
+      src: templates/database.yml.j2 
+      dest: /home/ubuntu/calendar/config/database.yml
+    notify: restart nginx
+
+  - name: start nginx
+    service: 
+      name: nginx
+      state: started
+      enabled: yes
+    become: yes
+
+  - name: configure databases
+    # environment: 
+    #   PATH: '/home/ubuntu/.rvm/rubies/ruby-2.5.1/bin:/home/ubuntu/.rvm/gems/ruby-2.5.1/bin:/home/ubuntu/.rvm/gems/ruby-2.5.1@global/bin:{{ ansible_env.PATH }}' 
+    shell: "rails db:create && rails db:migrate && rails db:seed && rails db:create db:migrate db:seed RAILS_ENV=production && rails assets:precompile"
+    args:
+      chdir: ~/calendar/ 
+
+  handlers: 
+  - name: restart nginx
+    service:
+      name: nginx
+      state: restarted
+    become: yes

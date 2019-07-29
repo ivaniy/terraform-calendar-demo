@@ -1,5 +1,6 @@
-build.sh
-destroy.sh
 .terraform/
 terraform.tfstate*
 .DS_Store
+test/
+ansible/timer.yml
+

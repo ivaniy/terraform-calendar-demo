@@ -1,0 +1,7 @@
+- hosts: tag_Name_Jenkins 
+  roles:
+    - role: geerlingguy.java
+      become: yes
+    - role: geerlingguy.jenkins
+      jenkins_plugins: ['github-branch-source','workflow-aggregator','ssh-agent','git','git-parameter','github','ssh']
+      become: yes
