@@ -3,5 +3,31 @@
     - role: geerlingguy.java
       become: yes
     - role: geerlingguy.jenkins
-      jenkins_plugins: ['github-branch-source','workflow-aggregator','ssh-agent','git','git-parameter','github','ssh']
+      jenkins_plugins: ['github-branch-source','timestamper','workflow-aggregator','locale','ssh-slaves', 'ec2', 'ssh-agent','git','git-parameter','github','ssh','greenballs','ansible']
+      become: yes
+    - role: terraform
+      terraform_version: 0.12.3
+      become: yes
+  
+  tasks: 
+    - name: install software-properties-common
+      apt: 
+        name: software-properties-common
+        state: present
+        update_cache: yes
+        force_apt_get: yes
+      become: yes
+
+    - name:  add ansible repository
+      apt_repository: 
+        repo: ppa:ansible/ansible
+        update_cache: yes
+      become: yes
+
+    - name: install ansible
+      apt: 
+        name: ansible
+        state: present
+        # update_cache: yes
+        force_apt_get: yes
       become: yes

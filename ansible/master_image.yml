@@ -1,0 +1,54 @@
+- hosts: tag_Name_Master_Image
+  roles:
+  - { role: geerlingguy.java,
+      become: yes
+    }  
+  - { role: ruby,
+      tags: ruby,
+      rvm_rubies: ['ruby-2.5.1'],
+      rvm_gpg_key_server_use_http: true,
+      rvm_gpg_key_server: "hkp://keys.gnupg.net",
+      become: true
+    }
+  - { role: nodejs,
+      become: yes
+    }
+  - { role: nginx,
+      nginx_packet: 'nginx-extras',
+      become: yes
+    }
+  - { role: passenger,
+      become: yes
+    }
+
+  tasks: 
+  - name: install mysql client and libdev
+    apt: 
+      name:
+        - mysql-client 
+        - libmysqlclient-dev
+      update_cache: yes
+      force_apt_get: yes
+    become: yes
+  
+  - name: install rails 5.2
+    shell: 'gem install rails -v 5.2'
+    async: 300
+    poll: 0
+    register: rails_waiter
+    become: true
+
+  - name: 'Checking is rails installed'
+    async_status:
+      jid: "{{ rails_waiter.ansible_job_id }}"
+    register: rails_result
+    until: rails_result.finished
+    delay: 15
+    retries: 25
+    become: true
+
+  # - name: remove default nginx config from enabled sites
+  #   file: 
+  #     path: /etc/nginx/sites-enabled/default
+  #     state: absent
+  #   become: yes

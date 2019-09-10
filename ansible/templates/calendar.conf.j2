@@ -1,0 +1,8 @@
+server {
+	listen 80 default_server;
+	
+	server_name _;
+              passenger_enabled on;
+              rails_env    {{ calendar_rails_env }};
+              root        {{ calendar_project_root }}public;   # your path
+}

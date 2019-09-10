@@ -1,8 +1,8 @@
 terraform {
   backend "s3" {
-    bucket = "idoly-tf-state"
+    bucket = "dolyuk-terraform-state"
     key    = "calendar/terraform.tfstate"
-    region = "eu-west-1"
+    region = "eu-central-1"
   }
 }
 
@@ -12,20 +12,20 @@ provider "aws" {
   region     = "${var.aws_region}"
 }
 
-# resource "aws_key_pair" "nat_gw_key" {
-#   key_name   = "nat-gateway-key"
-#   public_key = "${file(var.nat_gw_pb_key)}"
-# }
+resource "aws_key_pair" "nat_gw_key" {
+  key_name   = "nat-gateway-key"
+  public_key = "${file(var.nat_gw_pb_key)}"
+}
 
-# resource "aws_key_pair" "calendar_key" {
-#   key_name   = "calendar-key"
-#   public_key = "${file(var.calendar_pb_key)}"
-# }
+resource "aws_key_pair" "calendar_key" {
+  key_name   = "calendar-key"
+  public_key = "${file(var.calendar_pb_key)}"
+}
 
-# resource "aws_key_pair" "jenkins_key" {
-#   key_name   = "jenkins-key"
-#   public_key = "${file(var.jenkins_pb_key)}"
-# }
+resource "aws_key_pair" "jenkins_key" {
+  key_name   = "jenkins-key"
+  public_key = "${file(var.jenkins_pb_key)}"
+}
 
 module "dolyuk_vpc" {
   source = "./modules/vpc"
@@ -61,8 +61,71 @@ module "jenkins_instance" {
   bastion_private_key = "${var.nat_gw_key}"
 }
 
-resource "aws_instance" "first_deploy" {
+resource "aws_instance" "master_image" {
   ami                    = "${lookup(var.ubuntu_ami,var.aws_region)}"
+  instance_type          = "t2.micro"
+  subnet_id              = "${module.dolyuk_vpc.private_subnets_ids[0]}"
+  key_name               = "calendar-key" # "${aws_key_pair.calendar_key.key_name}"
+  vpc_security_group_ids = ["${module.dolyuk_vpc.security_group_websg_id}"]
+  associate_public_ip_address = false
+  tags = {
+    Name = "Master Image"
+  }
+
+  connection {
+    type = "ssh"
+    host = "${self.private_ip}"
+    user        = "ubuntu"
+    private_key = "${file(var.calendar_key)}"
+    bastion_host = "${module.dolyuk_vpc.bastion_ip}"
+    bastion_user = "${module.dolyuk_vpc.bastion_user}"
+    bastion_private_key = "${file(var.nat_gw_key)}"
+  }
+
+  provisioner "remote-exec" {
+    # Bootstrap script called with private_ip of each node in the clutser
+    inline = ["echo 'Hello Master Image'"]
+  }
+}
+
+resource "null_resource" "master_image_provisioner" {
+  depends_on = ["aws_instance.master_image"]
+  triggers = {
+    cluster_instance_ids = "[${aws_instance.master_image.id}]"
+  }
+  connection {
+    type = "ssh"
+    host = "${aws_instance.master_image.private_ip}"
+    user        = "ubuntu"
+    private_key = "${file(var.calendar_key)}"
+    bastion_host = "${module.dolyuk_vpc.bastion_ip}"
+    bastion_user = "${module.dolyuk_vpc.bastion_user}"
+    bastion_private_key = "${file(var.nat_gw_key)}"
+  }
+
+  provisioner "local-exec" {
+    command = "ansible-playbook ./ansible/master_image.yml -i ec2.py --extra-vars \"ansible_user=ubuntu ansible_ssh_private_key_file=${var.calendar_key} ansible_ssh_common_args='-o ProxyCommand=\\\"ssh -i ${var.nat_gw_key} -o StrictHostKeyChecking=no -W %h:%p -q ${module.dolyuk_vpc.bastion_user}@${module.dolyuk_vpc.bastion_ip}\\\"'\""
+    environment = {
+      ANSIBLE_CONFIG="./ansible/ansible.cfg"
+    } 
+  }
+
+  provisioner "remote-exec" {
+    # Test Waking instance before snapshot  
+    inline = ["sleep 5s",
+              "echo 'Waking'"]
+  }  
+}
+
+resource "aws_ami_from_instance" "master_image" {
+    name = "Master Image"
+    source_instance_id = "${aws_instance.master_image.id}"
+    snapshot_without_reboot = false
+    depends_on = ["null_resource.master_image_provisioner"]
+}
+
+resource "aws_instance" "first_deploy" {
+  ami                    = "${aws_ami_from_instance.master_image.id}"
   instance_type          = "t2.micro"
   subnet_id              = "${module.dolyuk_vpc.private_subnets_ids[0]}"
   key_name               = "calendar-key" # "${aws_key_pair.calendar_key.key_name}"
@@ -84,12 +147,15 @@ resource "aws_instance" "first_deploy" {
 
   provisioner "remote-exec" {
     # Bootstrap script called with private_ip of each node in the clutser
-    inline = ["echo 'Hello World'"]
+    inline = ["echo 'Hello First Deploy'"]
   }
 }
 
 resource "null_resource" "first_deploy_provisioner" {
   depends_on = ["aws_instance.first_deploy"]
+  triggers = {
+    cluster_instance_ids = "[${aws_instance.first_deploy.id}]"
+  }
   connection {
     type = "ssh"
     host = "${aws_instance.first_deploy.private_ip}"
@@ -147,4 +213,12 @@ module "route53_druk" {
   domain_name = "3ddruk.com.ua"
   lb_address = "${module.app_loadbalancer.lb_address}"
   lb_zone_id = "${module.app_loadbalancer.lb_zone_id}"
+}
+
+output "jenkins_address" {
+   value = "http://${module.jenkins_instance.jenkins_ip}:8080" 
+}
+
+output "jenkins_pass" {
+   value = "${module.jenkins_instance.jenkins_password}" 
 }

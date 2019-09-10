@@ -1,12 +1,6 @@
-- hosts: tag_Name_First_Deploy
+- hosts: tag_Name_Jenkins_Slave
 
   tasks: 
-  - name: clone calendar
-    git: 
-      repo: 'https://github.com/ivaniy/ruby-calendar.git'
-      dest: ~/calendar/
-      force: yes 
-
   # - name: install rails 5.2
   #   shell: 'gem install rails -v 5.2'
   #   async: 300
@@ -26,7 +20,7 @@
     #   PATH: '/home/ubuntu/.rvm/rubies/ruby-2.5.1/bin:/home/ubuntu/.rvm/gems/ruby-2.5.1/bin:/home/ubuntu/.rvm/gems/ruby-2.5.1@global/bin:{{ ansible_env.PATH }}' 
     shell: bundle
     args:
-      chdir: ~/calendar/ 
+      chdir: {{ calendar_project_root }} 
 
   - name: Enable passenger module
     file:
@@ -52,11 +46,11 @@
     notify: restart nginx
 
   - name: copy Calendar nginx config
-    copy: 
-      src: files/calendar.conf
+    template: 
+      src: templates/calendar.conf.j2
       dest: /etc/nginx/sites-available/calendar.conf
     become: yes
-    notify: restart nginx
+    notify: yes
 
   - name: Make Symlink for calendar.conf in sites-enabled
     file: 
@@ -69,7 +63,7 @@
   - name: copy configure database file
     template: 
       src: templates/database.yml.j2 
-      dest: /home/ubuntu/calendar/config/database.yml
+      dest: {{ calendar_project_root }}config/database.yml
     notify: restart nginx
 
   - name: start nginx
@@ -79,33 +73,26 @@
       enabled: yes
     become: yes
 
-  - meta: flush_handlers
-
   - name: configure databases
     # environment: 
     #   PATH: '/home/ubuntu/.rvm/rubies/ruby-2.5.1/bin:/home/ubuntu/.rvm/gems/ruby-2.5.1/bin:/home/ubuntu/.rvm/gems/ruby-2.5.1@global/bin:{{ ansible_env.PATH }}' 
-    shell: "rails db:create && rails db:migrate && rails db:seed && rails db:create db:migrate db:seed RAILS_ENV=production && rails assets:precompile"
+    shell: "RAILS_ENV={{ calendar_rails_env }} && rails assets:precompile"
     args:
-      chdir: ~/calendar/ 
+      chdir: {{ calendar_project_root }} 
   
   - name: test using rspec
     shell: "bundle exec rspec"
     args:
-      chdir: ~/calendar/
+      chdir: {{ calendar_project_root }}
+  
+  - meta: flush_handler
 
-  - name: Check that you can connect (GET) to a page and it returns a status 302
+  - name: Check that you can connect (GET) to a page and it returns a status 200
     uri:
-      url: http://localhost/
+      url: https://7office.com.ua
       follow_redirects: none
-      status_code: [302]
-    register: answer302
-
-  - name: Check that you can connect (GET) to a page and it redirects and after returns a status 200
-    uri:
-      url: http://localhost/
-      follow_redirects: safe
-      status_code: [200]
-    register: answer200
+      status_code: [200,302,301,403]
+    register: answer
 
   handlers: 
   - name: restart nginx

@@ -1,5 +1,5 @@
 resource "aws_launch_configuration" "lnch_cfg" {
-  name            = "${var.lnch_cfg_name}"
+  name_prefix     = "${var.lnch_cfg_name}"
   image_id        = "${var.aws_ami_id}"
   instance_type   = "t2.micro"
   key_name        = "${var.lnch_cfg_key}"
