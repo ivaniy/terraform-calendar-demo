@@ -5,6 +5,10 @@ variable "aws_region" {
   default = "eu-west-1"
 }
 
+variable "github_user" {}
+
+variable "github_token" {}
+
 variable "public_subnets_cidr" {
   default = ["172.31.0.0/24","172.31.1.0/24"]
 }

@@ -43,8 +43,8 @@
       jid: "{{ rails_waiter.ansible_job_id }}"
     register: rails_result
     until: rails_result.finished
-    delay: 15
-    retries: 25
+    delay: 20
+    retries: 10
     become: true
 
   # - name: remove default nginx config from enabled sites

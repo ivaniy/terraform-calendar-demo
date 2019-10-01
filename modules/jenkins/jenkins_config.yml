@@ -1,0 +1,128 @@
+- hosts: all
+  
+  tasks: 
+    - name: Put Github User/Token to Jenkins
+      jenkins_script: 
+        script:  "{{ lookup('file', './templates/addUserPassCreds.groovy.tpl') }}"
+        user: "{{ jenkins_admin_username }}"
+        password: "{{ jenkins_admin_password }}"
+        args:
+          userName: "{{ github_user }}"
+          description: ""
+          id: "GitHubUserToken"
+          password: "{{ github_token }}"
+
+    - name: Put Database User/Pass to Jenkins
+      jenkins_script: 
+        script:  "{{ lookup('file', './templates/addUserPassCreds.groovy.tpl') }}"
+        user: "{{ jenkins_admin_username }}"
+        password: "{{ jenkins_admin_password }}"
+        args:
+          userName: "calendar_db_user"
+          description: "Username and password for calendar_db"
+          id: "DatabaseCreds"
+          password: "{{ database_password }}"
+
+    - name: Put SonarQube Token to Jenkins 
+      jenkins_script: 
+        script:  "{{ lookup('file', './templates/addSecretTextCreds.groovy.tpl') }}"
+        user: "{{ jenkins_admin_username }}"
+        password: "{{ jenkins_admin_password }}"
+        args:
+          description: "SonarToken"
+          id: "SonarToken"
+          secret: "{{ lookup('file', '/tmp/sonartoken.txt') }}"
+
+    - name: Put Calendar Instne SSH Key to Jenkins
+      jenkins_script: 
+        script:  "{{ lookup('file', './templates/addSSHUserKeyCreds.groovy.tpl') }}"
+        user: "{{ jenkins_admin_username }}"
+        password: "{{ jenkins_admin_password }}"
+        args:
+          userName: "ubuntu"
+          password: ""
+          description: "Calendar key for SSH"
+          id: "CalendarSSH"
+          private_key: "{{ lookup('file', calendar_key_file) }}"
+
+    - name: Put Github SecretText Token to Jenkins 
+      jenkins_script: 
+        script:  "{{ lookup('file', './templates/addSecretTextCreds.groovy.tpl') }}"
+        user: "{{ jenkins_admin_username }}"
+        password: "{{ jenkins_admin_password }}"
+        args:
+          description: "GitHubSecret"
+          id: "GitHubSecret"
+          secret: "{{ github_token }}"
+
+    - name: Put DB Address to Global Vars in Jenkins 
+      jenkins_script: 
+        script:  "{{ lookup('file', './templates/addGlobalVar.groovy.tpl') }}"
+        user: "{{ jenkins_admin_username }}"
+        password: "{{ jenkins_admin_password }}"
+        args:
+          key: "calendar_db_host"
+          value: "{{ db_host_name }}"
+
+    - name: Configure AWS plugin in Jenkins 
+      jenkins_script: 
+        script:  "{{ lookup('file', './templates/aws.cloud.config.groovy.tpl') }}"
+        user: "{{ jenkins_admin_username }}"
+        password: "{{ jenkins_admin_password }}"
+        args:
+          ami: "{{ master_image_ami }}"
+          aws_region: "{{ aws_region }}"
+          private_key: "{{ lookup('file', calendar_key_file) }}"
+          aws_az: "{{ aws_region }}a"
+          subnetId: "{{ private_subnet_id }}"
+          securityGroups: "Web_SecGr"
+
+    - name: Configure Language in Jenkins 
+      jenkins_script: 
+        script:  "{{ lookup('file', './templates/locale.groovy') }}"
+        user: "{{ jenkins_admin_username }}"
+        password: "{{ jenkins_admin_password }}"
+        
+    - name: Configure GitHub Server in Jenkins 
+      jenkins_script: 
+        script:  "{{ lookup('file', './templates/gitHubServerConfig.groovy') }}"
+        user: "{{ jenkins_admin_username }}"
+        password: "{{ jenkins_admin_password }}"
+
+    - name: Multibranch Pipeline for pull request
+      jenkins_script: 
+        script:  "{{ lookup('file', './templates/mbpl.job.groovy.tpl') }}"
+        user: "{{ jenkins_admin_username }}"
+        password: "{{ jenkins_admin_password }}"
+        args:
+          jobName: "MBPL-PullRequest"
+          jobScript: "ci/pull.jenkins" 
+          gitRepo: "https://github.com/ivaniy/ruby-calendar.git"
+          gitRepoName: "ruby-calendar"  
+          credentialsId: "GitHubUserToken" 
+          repoOwner: "{{ github_user }}" 
+          includes: "" 
+          excludes: ""
+          githubApiUrl: "https://api.github.com"
+          branch_discover_strategy: 0
+          pull_request_strategy: 2
+
+    - name: Multibranch Pipeline for feature branch
+      jenkins_script: 
+        script:  "{{ lookup('file', './templates/mbpl.job.groovy.tpl') }}"
+        user: "{{ jenkins_admin_username }}"
+        password: "{{ jenkins_admin_password }}"
+        args:
+          jobName: "MBPL-Feature-CodeTest"
+          jobScript: "ci/feature.jenkins" 
+          gitRepo: "https://github.com/ivaniy/ruby-calendar.git"
+          gitRepoName: "ruby-calendar"  
+          credentialsId: "GitHubUserToken" 
+          repoOwner: "{{ github_user }}" 
+          includes: "feature*" 
+          excludes: ""
+          githubApiUrl: "https://api.github.com"
+          branch_discover_strategy: 1
+          pull_request_strategy: 0
+
+  

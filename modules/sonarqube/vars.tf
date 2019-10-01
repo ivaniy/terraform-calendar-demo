@@ -8,11 +8,4 @@
   variable "bastion_ip" {}
   variable "bastion_user" {}
   variable "bastion_private_key" {}
-  variable "db_host_name" {}
-  variable "db_password" {}
-  variable "master_image_ami" {}
-  variable "private_subnet_id" {}
-  variable "calendar_key" {}
-  variable "aws_region" {}
-  variable "github_user" {}
-  variable "github_token" {}
+  variable "jenkins_address" {}

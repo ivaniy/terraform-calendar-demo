@@ -14,8 +14,8 @@ resource "aws_launch_configuration" "lnch_cfg" {
 resource "aws_autoscaling_group" "app_asg" {
   name                 = "${var.asg_name}"
   launch_configuration = "${aws_launch_configuration.lnch_cfg.name}"
-  min_size             = 1
-  desired_capacity     = 1
+  min_size             = 0
+  desired_capacity     = 0
   max_size             = 4
   vpc_zone_identifier  = "${var.private_subnet_ids}"
   target_group_arns    = "${var.lb_tg_arns}"

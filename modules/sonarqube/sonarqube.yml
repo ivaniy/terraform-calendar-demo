@@ -1,0 +1,115 @@
+- hosts: all
+  roles:
+    - role: docker 
+      become: yes
+  vars: 
+    tokenname: jenkinstoken
+    webhookname: jenkinsWebhook
+    webhookupdate: false
+  
+  tasks: 
+    - name: install pip3
+      apt: 
+        name: python3-pip
+        state: present
+        update_cache: yes
+        force_apt_get: yes
+      become: yes
+
+    - name: install docker-py
+      pip:
+        name: docker-py
+        state: present
+        executable: pip3
+      become: yes
+
+    # - name: install docker-py
+    #   pip:
+    #     name: docker-py
+    #     state: present
+    #     executable: pip
+    #   become: yes
+
+
+    - name: get sonarqube docker image
+      docker_image:
+        name: sonarqube
+        source: pull
+
+    - name: run sonarqube container
+      docker_container:
+        name: sonarqube
+        image: sonarqube
+        detach: yes
+        state: started
+        ports:
+        - "9000:9000"
+
+    - name: wait for Sonarqube start 
+      uri:
+        url: "http://localhost:9000/"
+        status_code: 200
+      register: sonar_http_result
+      until: sonar_http_result.status == 200
+      retries: 60
+      delay: 1
+
+    - name: Check SonarQubeStatus 
+      uri:
+        url: "http://localhost:9000/api/system/status"
+      register: sonarqube_status
+      until: sonarqube_status.json.status == "UP"
+      retries: 60
+      delay: 1
+
+    - name: check if token is exist
+      uri:
+        url: "http://localhost:9000/api/user_tokens/search"
+        user: admin
+        password: admin
+        method: POST
+        body: "login=admin"
+        force_basic_auth: yes
+      register: jenkinstokens
+
+    - name: generate token for jenkins
+      uri:
+        url: "http://localhost:9000/api/user_tokens/generate"
+        user: admin 
+        password: admin
+        method: POST
+        body: "name=jenkinstoken"
+        force_basic_auth: yes
+      register: jenkinstoken
+      when:  tokenname not in jenkinstokens.json | json_query('userTokens[*].name') 
+
+    - name: Check if webhook to jenkins is exist
+      uri:
+        url: "http://localhost:9000/api/webhooks/list"
+        user: admin
+        password: admin
+        method: GET
+        force_basic_auth: yes
+      register: jenkinswebhooks
+
+    - name: Configure webhook to jenkins
+      uri:
+        url: "http://localhost:9000/api/webhooks/create"
+        user: admin
+        password: admin
+        method: POST
+        body: "name=jenkinsWebhook&url={{ jenkins_address }}/sonarqube-webhook/"
+        force_basic_auth: yes
+      when: webhookname not in jenkinswebhooks.json | json_query('webhooks[*].name')
+
+    - name: jenkins Token 
+      debug:
+        var: jenkinstoken.json.token
+      when:  tokenname not in jenkinstokens.json | json_query('userTokens[*].name')
+
+    - name: copy the token output to a local file
+      copy:
+        content: "{{ jenkinstoken.json.token }}"
+        dest: "/tmp/sonartoken.txt"
+      delegate_to: localhost
+      when:  tokenname not in jenkinstokens.json | json_query('userTokens[*].name')
