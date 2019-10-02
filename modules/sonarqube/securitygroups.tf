@@ -10,7 +10,6 @@ resource "aws_security_group" "sonarqube_sg" {
     description = "Global access to sonarqube"
   }
 
-
   # SSH access to sonarqube from Public Subnet
   ingress {
     from_port   = 22
